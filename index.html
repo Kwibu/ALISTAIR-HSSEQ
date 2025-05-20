@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Driver Check-In</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding-top: 100px;
+    }
+    form {
+      display: inline-block;
+      padding: 30px;
+      background-color: #f2f2f2;
+      border-radius: 10px;
+      box-shadow: 0 0 10px #ccc;
+    }
+    input {
+      margin: 10px 0;
+      padding: 10px;
+      width: 100%;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <form id="checkinForm">
+    <h2>Driver Check-In</h2>
+    <input type="text" id="name" placeholder="Full Name" required><br>
+    <input type="text" id="truck" placeholder="Truck Number" required><br>
+    <button type="submit">Submit and Watch Video</button>
+  </form>
+
+  <script>
+    document.getElementById('checkinForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      const name = document.getElementById('name').value;
+      const truck = document.getElementById('truck').value;
+
+      const data = {
+        name: name,
+        truck: truck
+      };
+
+      fetch('https://script.google.com/macros/s/AKfycbxZufvLyzT5BhtpQUqTyWb6O6Fe9s2z2SyCW5ieX6zlSO_-sb4AnUtsfekGiqxUZsIb/exec', {
+        method: 'POST',
+        mode: 'no-cors', // Because the web app doesn't return CORS headers
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+
+      // Redirect after small delay
+      setTimeout(() => {
+        window.location.href = "https://drive.google.com/file/d/11dizfdhwsutrjiVhZbkSqJEz7q0OwscD/view?usp=drive_link";
+      }, 1000); // wait 1 sec before redirecting (optional)
+    });
+  </script>
+
+</body>
+</html>
