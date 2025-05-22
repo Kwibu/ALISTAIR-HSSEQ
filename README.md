@@ -5,13 +5,12 @@ This is a simple form-based system to track truck driver attendance and ensure t
 ## 🚛 How It Works
 
 1. Drivers fill out a Google Form with:
-   - First Name
-   - Last Name
+   - First Name and Last Name
    - Truck Number
 
-2. After submitting, they are shown a link to watch the daily safety video (hosted on Google Drive).
+2. After submitting, they are redirected to a link to watch the daily safety video (hosted on Google Drive).
 
-3. Responses are automatically stored in a Google Sheet for easy tracking and reporting.
+3. Responses are automatically stored in a Google Sheet for easy tracking and reporting in form of Timestamp, Full name and Truck Number.
 
 ---
 
@@ -36,7 +35,7 @@ To change the video:
 
 ## 📁 Live Resources
 
-- [Today’s Safety Video](https://drive.google.com/file/d/1xu_BSP2XHLTDGFmGQ5h_eB_kI0XRGlZB/view?usp=drivesdk)
+- Thank you! Please watch today’s safety video here: https://drive.google.com/file/d/11dizfdhwsutrjiVhZbkSqJEz7q0OwscD/view
 - [🧾 Attendance Response Sheet](https://docs.google.com/spreadsheets/d/17c0H7_7loaY0qWzBciaPpNOT6vGcJiOqqEMpFQGHw4A/edit?usp=sharing)
 
 
