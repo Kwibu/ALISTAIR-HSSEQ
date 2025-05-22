@@ -36,8 +36,9 @@ To change the video:
 
 ## 📁 Live Resources
 
-- [Google Form Link](https://forms.gle/q7ndkZejMq1AnXJC8)
 - [Today’s Safety Video](https://drive.google.com/file/d/1xu_BSP2XHLTDGFmGQ5h_eB_kI0XRGlZB/view?usp=drivesdk)
+- [🧾 Attendance Response Sheet](https://docs.google.com/spreadsheets/d/17c0H7_7loaY0qWzBciaPpNOT6vGcJiOqqEMpFQGHw4A/edit?usp=sharing)
+
 
 ---
 
