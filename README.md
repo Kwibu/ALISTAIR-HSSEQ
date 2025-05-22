@@ -1,47 +1,49 @@
-# Daily Truck Safety Attendance System
+# 🚛 Driver Safety Check-In System
 
-This is a simple form-based system to track truck driver attendance and ensure they watch daily safety training videos.
+This is a simple web-based form for truck drivers to check in before watching daily safety videos. Submitted data is stored in a Google Sheet via Google Apps Script.
 
-## 🚛 How It Works
+---
 
-1. Drivers fill out a Google Form with:
-   - First Name and Last Name
+## 📝 How It Works
+
+1. **Driver opens the form webpage**
+2. Enters:
+   - Full Name
    - Truck Number
-
-2. After submitting, they are redirected to a link to watch the daily safety video (hosted on Google Drive).
-
-3. Responses are automatically stored in a Google Sheet for easy tracking and reporting in form of Timestamp, Full name and Truck Number.
+3. Data is submitted via a Google Apps Script and saved to the response spreadsheet.
+4. After 1 second, the form **automatically redirects** to a safety video hosted on Google Drive.
 
 ---
 
-## 🎥 Updating the Daily Video
+## 💻 Technologies Used
 
-To change the video:
-1. Open your Google Form.
-2. Go to **Settings** (⚙️) → **Presentation** tab.
-3. In the **Confirmation message**, update the video link like:
-
-4. Save your changes.
+- HTML/CSS
+- Google Apps Script (for data storage)
+- Google Sheets (as a backend database)
+- Google Drive (for video hosting)
 
 ---
 
-## ✨ Coming Soon Features
+## 📂 Live Links
 
-- Autofill truck number based on selected name
-- Name suggestion dropdown
-- Full GitHub-hosted tracking system (HTML + JS + Google Sheets backend)
-
----
-
-## 📁 Live Resources
-
-- Thank you! Please watch today’s safety video here: https://drive.google.com/file/d/11dizfdhwsutrjiVhZbkSqJEz7q0OwscD/view
-- [🧾 Attendance Response Sheet](https://docs.google.com/spreadsheets/d/17c0H7_7loaY0qWzBciaPpNOT6vGcJiOqqEMpFQGHw4A/edit?usp=sharing)
-
+- ✅ [Live Google Form (alternative version)](https://forms.gle/q7ndkZejMq1AnXJC8)
+- 📊 [View Attendance Sheet](https://docs.google.com/spreadsheets/d/17c0H7_7loaY0qWzBciaPpNOT6vGcJiOqqEMpFQGHw4A/edit?usp=sharing)
+- 🎬 [Today’s Safety Video](https://drive.google.com/file/d/11dizfdhwsutrjiVhZbkSqJEz7q0OwscD/view)
 
 ---
 
-## 👨‍🔧 Maintainer
+## 📁 Project Files
 
-**Kwilasa Augustine Kwilasa**  
-Email: kwilasaagustine57@gmail.com  
+### `index.html`
+```html
+<!-- Form with redirection after data submission -->
+<form id="checkinForm">
+  ...
+</form>
+
+<script>
+  fetch('https://script.google.com/macros/s/YOUR_DEPLOYED_SCRIPT_ID/exec', { method: 'POST', body: formData });
+  setTimeout(() => {
+    window.location.href = "https://drive.google.com/file/d/11dizfdhwsutrjiVhZbkSqJEz7q0OwscD/view";
+  }, 1000);
+</script>
