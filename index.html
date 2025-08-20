@@ -1709,6 +1709,270 @@ try {
   DriverTrainingApp.prototype.fetchAssignmentsMerged = patched_fetchAssignmentsMerged;
 })();
 </script>
+<!-- GLOBAL VISIBILITY PATCH: make all admin uploads visible to all drivers by language -->
+<script>
+(function () {
+  if (!window.DriverTrainingApp) return;
+
+  /**
+   * SERVER CONTRACTS (Apps Script):
+   * 1) POST mode=admin_add_video (non-file sources)
+   *    body: { language, id, title, type, videoId?, driveId?, url?, note? }
+   *    resp: { success:true, video:{ id,title,language,type,videoId,driveId,url,createdAt } }
+   *
+   * 2) POST mode=admin_upload_file (file uploads)
+   *    body: multipart/form-data with fields:
+   *      - language (string), id (string), title (string), note (string, optional)
+   *      - file (blob)
+   *    resp: { success:true, video:{ id,title,language,type:'mp4',url,createdAt } }
+   *
+   * 3) GET  mode=catalog&language=LANG
+   *    resp: { videos:[ { id,title,language,type,videoId?,driveId?,url?,createdAt } ] }
+   */
+
+  /** Helper: robust catalog fetch (shared by drivers) */
+  if (!DriverTrainingApp.prototype.fetchCatalog) {
+    DriverTrainingApp.prototype.fetchCatalog = async function (language) {
+      const lang = language || this.selectedLang || 'English';
+      try {
+        const r = await fetch(
+          `${CONFIG.BASE_URL}?mode=catalog&language=${encodeURIComponent(lang)}`,
+          { cache: 'no-store' }
+        );
+        if (!r.ok) return [];
+        const j = await r.json();
+        if (!Array.isArray(j.videos)) return [];
+        return j.videos
+          .map(v => ({
+            id: (v.id || '').trim(),
+            title: v.title || 'Training',
+            language: v.language || lang,
+            source: {
+              type: v.type,
+              videoId: v.videoId,
+              driveId: v.driveId,
+              url: v.url
+            },
+            status: 'assigned',
+            assignedAt: v.createdAt || new Date().toISOString().slice(0, 10)
+          }))
+          .filter(x => x.id);
+      } catch (e) {
+        console.error('catalog fetch failed', e);
+        return [];
+      }
+    };
+  }
+
+  /** NEW: upload binary file to backend → get back a hosted URL (global) */
+  if (!DriverTrainingApp.prototype.postAdminUploadFile) {
+    DriverTrainingApp.prototype.postAdminUploadFile = async function ({ file, language, id, title, note }) {
+      const fd = new FormData();
+      fd.append('mode', 'admin_upload_file');
+      fd.append('language', language || '');
+      fd.append('id', id || '');
+      fd.append('title', title || '');
+      fd.append('note', note || '');
+      fd.append('file', file, file.name || 'video.mp4');
+
+      const res = await fetch(CONFIG.BASE_URL, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!data || data.success === false) throw new Error(data?.message || 'Upload failed');
+      // Expect server to normalize to type:'mp4' and give us a globally reachable URL
+      return data.video; // { id,title,language,type:'mp4',url,createdAt }
+    };
+  }
+
+  /** Override: merge driver-assignments + global catalog + local (fallback) */
+  const patched_fetchAssignmentsMerged = async function () {
+    // Local admin (device) items remain a fallback
+    const vmap = this.getVideoLinks();
+    const localLangList = (vmap[this.selectedLang] || []).map(video => ({
+      id: video.id,
+      title: video.title,
+      language: this.selectedLang,
+      source: video,
+      status: 'assigned',
+      assignedAt: new Date().toISOString().slice(0, 10),
+      isAdminAdded: true
+    }));
+
+    // Server: driver-specific assignments
+    let serverAssignments = [];
+    try {
+      const q = new URLSearchParams({
+        mode: 'assignments',
+        language: this.selectedLang || '',
+        name: this.driver?.name || '',
+        truck: this.driver?.truck || ''
+      });
+      const res = await fetch(`${CONFIG.BASE_URL}?${q.toString()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.assignments)) {
+          serverAssignments = data.assignments.map(a => {
+            if (!a.source && a.type) a.source = { type: a.type, videoId: a.videoId, url: a.url, driveId: a.driveId };
+            if (!a.language) a.language = this.selectedLang;
+            return a;
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch assignments:', e);
+    }
+
+    // Server: language-wide catalog (YouTube-style global visibility)
+    let catalogItems = [];
+    try {
+      catalogItems = await this.fetchCatalog(this.selectedLang);
+    } catch (e) {
+      console.error('Failed to fetch catalog:', e);
+    }
+
+    // Priority: server assignments > catalog > local
+    const byId = new Map();
+    [...serverAssignments, ...catalogItems, ...localLangList].forEach(a => {
+      if (!a || !a.id) return;
+      const existing = byId.get(a.id) || {};
+      byId.set(a.id, { ...a, ...existing });
+    });
+
+    // Strip demo items if defined
+    return Array.from(byId.values()).filter(a => {
+      const id = (a?.id || '').trim();
+      const title = (a?.title || '').trim();
+      return !DEMO_IDS?.has?.(id) && !DEMO_TITLES?.has?.(title);
+    });
+  };
+
+  DriverTrainingApp.prototype.fetchAssignmentsMerged = patched_fetchAssignmentsMerged;
+
+  /**
+   * Override the Admin "Save Training" logic for type='local':
+   * - Upload file to backend → get a public URL → convert to type='mp4' with that URL
+   * - Also keep IndexedDB copy locally for offline playback (optional, already in your code)
+   */
+  const orig_initEventListeners = DriverTrainingApp.prototype.initEventListeners;
+  DriverTrainingApp.prototype.initEventListeners = function () {
+    orig_initEventListeners.call(this);
+
+    // Replace click handler for #saveVideoBtn with a wrapper that handles local upload → server URL
+    const saveBtn = document.getElementById('saveVideoBtn');
+    if (!saveBtn || saveBtn._patched) return;
+    saveBtn._patched = true;
+
+    saveBtn.addEventListener('click', async (ev) => {
+      // Let original handler gather values but we intercept early
+      ev.stopImmediatePropagation();
+      ev.preventDefault();
+
+      const lang = $('#adminLangSelect').value;
+      const title = $('#videoTitle').value.trim();
+      const type = $('#videoType').value;
+      const note = $('#videoNoteAdmin').value.trim();
+
+      if (!lang || !title || !type) { this.showToast('Please fill all required fields'); return; }
+
+      // Build a base record id first (for both local & server)
+      const id = this.generateId();
+
+      try {
+        let finalVideoMeta = null;
+
+        if (type === 'local') {
+          const file = $('#videoFile').files?.[0];
+          if (!file) { this.showToast('Choose a video file'); return; }
+
+          // 1) Keep local offline copy (as you already do)
+          try { await this.idbPut(id, file); } catch (e) { console.warn('IDB put failed', e); }
+
+          // 2) Upload to server → get global URL (so all drivers can see it)
+          try {
+            const serverVideo = await this.postAdminUploadFile({ file, language: lang, id, title, note });
+            // Normalize to a globally visible MP4
+            finalVideoMeta = {
+              id: serverVideo.id || id,
+              title,
+              type: 'mp4',
+              url: serverVideo.url,
+              note
+            };
+          } catch (e) {
+            console.error('Server upload failed; falling back to device-only', e);
+            this.showToast('Upload failed: saved to this device only (offline).');
+            // Fallback: keep device-only meta so admin can still preview locally
+            finalVideoMeta = { id, title, type: 'local', localKey: id, note };
+          }
+        } else if (type === 'youtube') {
+          const idOrUrl = $('#videoId').value.trim();
+          const videoId = this.parseYouTubeId(idOrUrl);
+          if (!videoId) { this.showToast('Invalid YouTube ID or URL'); return; }
+          finalVideoMeta = { id, title, type: 'youtube', videoId, note };
+        } else if (type === 'drive') {
+          const url = $('#videoId').value.trim();
+          const driveId = this.extractDriveFileId(url);
+          if (!driveId) { this.showToast('Invalid Google Drive link'); return; }
+          finalVideoMeta = { id, title, type: 'drive', driveId, note };
+        } else if (type === 'mp4') {
+          const url = $('#videoId').value.trim();
+          if (!/^https?:\/\//i.test(url)) { this.showToast('Enter a valid MP4 URL'); return; }
+          finalVideoMeta = { id, title, type: 'mp4', url, note };
+        } else {
+          this.showToast('Unsupported type'); return;
+        }
+
+        // Save locally to your custom language storage (kept for admin view & offline fallback)
+        const vmap = this.getVideoLinks();
+        const list = (vmap[lang] || []).filter(v => v.id !== finalVideoMeta.id).concat(finalVideoMeta);
+        this.setVideoLinksForLang(lang, list);
+
+        // Server persist for all but purely-local fallback
+        if (finalVideoMeta.type !== 'local') {
+          try {
+            const serverResp = await this.postAdminVideo({ language: lang, ...finalVideoMeta });
+            // optional: use serverResp.video if server normalizes fields
+          } catch (e) {
+            console.warn('Non-local admin_add_video failed; item still saved locally', e);
+          }
+        }
+
+        // Reset form
+        $('#videoTitle').value = '';
+        $('#videoType').value = '';
+        $('#videoId').value = '';
+        $('#videoFile').value = '';
+        $('#videoFile').style.display = 'none';
+        $('#videoSourceLabel').textContent = 'YouTube ID/URL';
+        $('#videoNoteAdmin').value = '';
+
+        // Refresh admin list and dashboard (driver view)
+        this.renderAdminVideoList();
+
+        // Ensure current session sees the item immediately
+        if (this.assignments) {
+          const assignment = {
+            id: finalVideoMeta.id,
+            title,
+            language: lang,
+            source: finalVideoMeta,
+            status: 'assigned',
+            assignedAt: new Date().toISOString().slice(0, 10),
+            isAdminAdded: true
+          };
+          this.assignments.push(assignment);
+          this.renderDashboard(this.assignments);
+        }
+
+        this.showToast('Training saved successfully');
+      } catch (err) {
+        console.error('Error saving training:', err);
+        this.showToast('Error saving training');
+      }
+    }, { capture: true });
+  };
+})();
+</script>
 
 </body>
 </html>
+
